@@ -7,7 +7,7 @@ import com.healthpay.appointment_service.domain.AppointmentStatus;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
-// praticar mais a injeção da entidade usando builder
+
 
 @Service
 @RequiredArgsConstructor
