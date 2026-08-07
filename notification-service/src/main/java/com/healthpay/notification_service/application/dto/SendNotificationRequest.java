@@ -1,13 +1,11 @@
 package com.healthpay.notification_service.application.dto;
 
 import com.healthpay.notification_service.domain.NotificationChannel;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class SendNotificationRequest {
