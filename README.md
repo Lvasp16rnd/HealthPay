@@ -8,6 +8,8 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-6.0-green?logo=mongodb&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![OpenAPI 3](https://img.shields.io/badge/OpenAPI-3.0-6BA539?logo=openapiinitiative&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
@@ -22,10 +24,12 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 
 ## 🚀 Funcionalidades Principais
 
-- **Agendamento de Consultas (`appointment-service`)**: Registro e ciclo de vida de consultas médicas (`SCHEDULED`, `CONFIRMED`, `CANCELLED`) com persistência relacional.
+- **Agendamento de Consultas (`appointment-service`)**: Registro e ciclo de vida de consultas médicas (`SCHEDULED`, `COMPLETED`, `CANCELLED`) com persistência relacional.
 - **Processamento de Pagamento (`payment-service`)**: Máquina de estados financeira (`PENDING`, `PROCESSING`, `APPROVED`, `FAILED`, `REFUNDED`) com disparo assíncrono de liquidações.
 - **Notificações Multicanal (`notification-service`)**: Envio desacoplado de confirmações e recibos via Email (extensível para SMS e Push Notification) utilizando o padrão **Strategy (GoF)** e persistência em NoSQL para auditoria.
 - **Saga Coreografada via Kafka**: Comunicação 100% assíncrona orientada a eventos de domínio (`appointmentCreated`, `paymentProcessed`) sem acoplamento entre os serviços.
+- **Documentação Viva com Swagger / OpenAPI 3**: Interface interativa para explorar e testar os contratos de API diretamente pelo navegador.
+- **Testes Unitários Rápidos e Isolados**: Cobertura de regras de negócio com **JUnit 5 + Mockito** explorando o desacoplamento da Clean Architecture.
 
 ---
 
@@ -38,6 +42,8 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 | **Mensageria** | Apache Kafka (KRaft) | Alta vazão, tolerância a falhas e ordenação garantida por partição sem necessidade do ZooKeeper. |
 | **Banco Relacional** | PostgreSQL 16 | Garantia ACID para transações financeiras e registros estruturados de agendamento. |
 | **Banco NoSQL** | MongoDB 6.0 | Armazenamento semiestruturado flexível de payloads de auditoria e logs de notificação. |
+| **Documentação de API** | Springdoc OpenAPI 3 / Swagger UI | Especificação padronizada e interface visual interativa para experimentação de endpoints. |
+| **Testes Automatizados** | JUnit 5, Mockito & AssertJ | Testes unitários puros nos Use Cases executados em milissegundos sem dependência de infraestrutura. |
 | **Padrões de Projeto** | Clean Architecture, Strategy, Saga | Desacoplamento do domínio em relação a frameworks e extensibilidade do código. |
 | **Infraestrutura** | Docker & Docker Compose | Padronização do ambiente de desenvolvimento e deploy conteinerizado da infraestrutura. |
 
@@ -58,7 +64,7 @@ sequenceDiagram
     participant Mongo as MongoDB
     participant Postgres as PostgreSQL
 
-    Cliente->>AppSvc: POST /appointments (Status: SCHEDULED)
+    Cliente->>AppSvc: POST /api/appointments (Status: SCHEDULED)
     AppSvc->>Postgres: Salva agendamento pendente
     AppSvc->>Kafka: Publica AppointmentCreatedEvent (Tópico: appointment.created)
     
@@ -74,7 +80,7 @@ sequenceDiagram
 
     par Consumo do Pagamento
         Kafka-->>AppSvc: Consome PaymentProcessedEvent
-        AppSvc->>Postgres: Atualiza consulta para CONFIRMED
+        AppSvc->>Postgres: Atualiza consulta para COMPLETED
     and
         Kafka-->>NotifSvc: Consome PaymentProcessedEvent
         NotifSvc->>NotifSvc: Strategy: EmailNotificationStrategy
@@ -99,7 +105,7 @@ src/main/java/com/healthpay/{service}/
 ├── infrastructure/          # Detalhes técnicos, frameworks, banco e mensageria
 │   ├── persistence/         # Implementação JPA / Mongo Repositories e Entidades ORM
 │   ├── messaging/           # Producers e Consumers Kafka (@KafkaListener)
-│   └── config/              # Beans de configuração (Kafka, Database)
+│   └── config/              # Beans de configuração (Kafka, Database, OpenAPI)
 └── presentation/            # Portas de entrada (Controllers REST, DTOs de Request/Response)
     ├── controller/
     └── dto/
@@ -150,12 +156,22 @@ mvn spring-boot:run
 
 ---
 
-### 3. Testando o Fluxo de Ponta a Ponta
+### 3. Documentação Interativa (Swagger UI)
+
+Com o `appointment-service` em execução, acesse a interface interativa do Swagger no seu navegador:
+
+🔗 **[http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)**
+
+Pelo Swagger UI, você pode visualizar todos os schemas, exemplos de payloads e executar requisições diretamente com o botão **"Try it out"**.
+
+---
+
+### 4. Testando o Fluxo de Ponta a Ponta via cURL
 
 Envie uma requisição `POST` para criar uma nova consulta:
 
 ```bash
-curl -X POST http://localhost:8080/appointments \
+curl -X POST http://localhost:8080/api/appointments \
   -H "Content-Type: application/json" \
   -d '{
     "patientId": "11111111-1111-1111-1111-111111111111",
@@ -165,7 +181,7 @@ curl -X POST http://localhost:8080/appointments \
   }'
 ```
 
-#### Resposta esperada (HTTP 201 Created):
+#### Resposta esperada (HTTP 200 OK):
 ```json
 {
   "id": "3291f9f6-c29f-447e-bc69-97bf04d3aea6",
@@ -179,8 +195,36 @@ curl -X POST http://localhost:8080/appointments \
 
 Acompanhe os logs dos serviços:
 1. O `payment-service` consome o evento, efetiva o pagamento e publica `paymentProcessed`.
-2. O `appointment-service` atualiza a consulta para o status `CONFIRMED`.
+2. O `appointment-service` atualiza a consulta para o status `COMPLETED`.
 3. O `notification-service` executa as estratégias de notificação e registra os logs de auditoria no MongoDB.
+
+---
+
+## 🧪 Testes Automatizados
+
+A arquitetura desacoplada permite que os Use Cases sejam testados de forma unitária em **milissegundos**, sem necessidade de inicializar o contexto do Spring Boot ou bancos de dados reais.
+
+Para rodar todos os testes automatizados de um microsserviço:
+
+```bash
+# Testes do Appointment Service
+cd appointment-service
+mvn test
+
+# Testes do Payment Service
+cd payment-service
+mvn test
+
+# Testes do Notification Service
+cd notification-service
+mvn test
+```
+
+### Cobertura dos Testes Unitários:
+- **`CreateAppointmentUseCaseTest`**: Criação de consulta, status inicial `SCHEDULED` e emissão do evento no Kafka.
+- **`UpdateAppointmentStatusUseCaseTest`**: Transição de estados da consulta e tratamento de exceção quando o registro não é encontrado.
+- **`ProcessPaymentUseCaseTest`**: Máquina de estados financeira validando aprovação (`APPROVED` para valores $\le$ R$ 1.000,00) e recusa (`FAILED` para valores $>$ R$ 1.000,00) com inspeção de eventos via `ArgumentCaptor`.
+- **`SendNotificationUseCaseTest`**: Resolução dinâmica de estratégias polimórficas (Strategy Pattern) para envio multicanal e validação de canais não suportados.
 
 ---
 
@@ -224,6 +268,8 @@ HealthPay/
 - [x] Processamento de pagamentos com máquina de estados.
 - [x] Notificações multicanal orientadas ao padrão Strategy.
 - [x] Integração completa de mensageria com Apache Kafka em modo KRaft.
+- [x] Documentação interativa de API via OpenAPI 3 / Swagger UI.
+- [x] Suíte de testes unitários isolados com JUnit 5 e Mockito nos Use Cases.
 - [ ] Implementação de Service Discovery e API Gateway com Spring Cloud Gateway.
 - [ ] Camada de segurança com autenticação stateless via Spring Security & JWT.
 - [ ] Observabilidade distribuída com Prometheus, Grafana e OpenTelemetry (Tracing).
