@@ -1,0 +1,48 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+          - id: appointment-service
+            uri: http://localhost:8080
+            predicates:
+              - Path=/api/appointments/**
+          - id: swagger-ui
+            uri: http://localhost:8080
+            predicates:
+              - Path=/swagger-ui.html
+          - id: swagger-resources
+            uri: http://localhost:8080
+            predicates:
+              - Path=/swagger-ui/**
+          - id: api-docs
+            uri: http://localhost:8080
+            predicates:
+              - Path=/v3/api-docs/**
+          - id: payment-service
+            uri: http://localhost:8081
+            predicates:
+              - Path=/api/payments/**
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
