@@ -1,6 +1,11 @@
 server:
   port: 8000
 
+api:
+  security:
+    token:
+      secret: ${JWT_SECRET:minha-chave-super-secreta-do-healthpay-2026}
+
 spring:
   application:
     name: gateway-service
@@ -13,6 +18,10 @@ spring:
             uri: http://localhost:8080
             predicates:
               - Path=/api/appointments/**
+          - id: auth-service
+            uri: http://localhost:8083
+            predicates:
+              - Path=/api/auth/**
           - id: swagger-ui
             uri: http://localhost:8080
             predicates:

@@ -27,6 +27,7 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 - **Agendamento de Consultas (`appointment-service`)**: Registro e ciclo de vida de consultas médicas (`SCHEDULED`, `COMPLETED`, `CANCELLED`) com persistência relacional.
 - **Processamento de Pagamento (`payment-service`)**: Máquina de estados financeira (`PENDING`, `PROCESSING`, `APPROVED`, `FAILED`, `REFUNDED`) com disparo assíncrono de liquidações.
 - **Notificações Multicanal (`notification-service`)**: Envio desacoplado de confirmações e recibos via Email (extensível para SMS e Push Notification) utilizando o padrão **Strategy (GoF)** e persistência em NoSQL para auditoria.
+- **Autenticação e Segurança (`auth-service` e `gateway-service`)**: Identity Provider com emissão de tokens JWT e um API Gateway blindado que atua como Resource Server validando rotas na borda.
 - **Saga Coreografada via Kafka**: Comunicação 100% assíncrona orientada a eventos de domínio (`appointmentCreated`, `paymentProcessed`) sem acoplamento entre os serviços.
 - **Documentação Viva com Swagger / OpenAPI 3**: Interface interativa para explorar e testar os contratos de API diretamente pelo navegador.
 - **Testes Unitários Rápidos e Isolados**: Cobertura de regras de negócio com **JUnit 5 + Mockito** explorando o desacoplamento da Clean Architecture.
@@ -38,9 +39,10 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 | Componente | Tecnologia | Justificativa |
 |---|---|---|
 | **Linguagem** | Java 21 LTS | Uso de Records para DTOs imutáveis, Pattern Matching e alta performance. |
-| **Framework** | Spring Boot | Produtividade no ecossistema corporativo com injeção de dependências e starters robustos. |
+| **Frameworks Base** | Spring Boot & Spring Cloud Gateway | Produtividade no ecossistema corporativo e roteamento performático baseado em WebFlux. |
+| **Segurança** | Spring Security & OAuth2 | Implementação de JWT Stateless e proteção de borda atuando como Resource Server. |
 | **Mensageria** | Apache Kafka (KRaft) | Alta vazão, tolerância a falhas e ordenação garantida por partição sem necessidade do ZooKeeper. |
-| **Banco Relacional** | PostgreSQL 16 | Garantia ACID para transações financeiras e registros estruturados de agendamento. |
+| **Banco Relacional** | PostgreSQL 16 | Garantia ACID para transações financeiras e registros estruturados de agendamento e usuários. |
 | **Banco NoSQL** | MongoDB 6.0 | Armazenamento semiestruturado flexível de payloads de auditoria e logs de notificação. |
 | **Documentação de API** | Springdoc OpenAPI 3 / Swagger UI | Especificação padronizada e interface visual interativa para experimentação de endpoints. |
 | **Testes Automatizados** | JUnit 5, Mockito & AssertJ | Testes unitários puros nos Use Cases executados em milissegundos sem dependência de infraestrutura. |
@@ -246,6 +248,10 @@ mvn test
    - *Decisão*: PostgreSQL para dados transacionais críticos (consultas e pagamentos com garantia ACID) e MongoDB para dados semiestruturados (histórico de notificações e auditoria).
    - *Trade-off*: Otimização de armazenamento e consultas por finalidade de negócio, com o custo de manter duas tecnologias de banco na infraestrutura.
 
+5. **API Gateway + Identity Provider Separado**:
+   - *Decisão*: Autenticação descentralizada onde o `auth-service` emite o JWT e o `gateway-service` apenas valida a assinatura criptográfica na borda da aplicação.
+   - *Trade-off*: Aumenta um pouco a complexidade de configuração de rotas e chaves, mas garante que requisições inválidas nunca consumam processamento interno dos microsserviços.
+
 ---
 
 ## 📂 Estrutura do Repositório
@@ -253,6 +259,8 @@ mvn test
 ```text
 HealthPay/
 ├── docker-compose.yml             # Orquestração de containers da infraestrutura
+├── gateway-service/               # API Gateway e Guardião de Segurança (Port 8000)
+├── auth-service/                  # Microsserviço de Identidade e JWT (Port 8083)
 ├── appointment-service/           # Microsserviço de Agendamento (Port 8080)
 ├── payment-service/               # Microsserviço de Pagamento (Port 8081)
 ├── notification-service/          # Microsserviço de Notificações (Port 8082)
@@ -270,8 +278,8 @@ HealthPay/
 - [x] Integração completa de mensageria com Apache Kafka em modo KRaft.
 - [x] Documentação interativa de API via OpenAPI 3 / Swagger UI.
 - [x] Suíte de testes unitários isolados com JUnit 5 e Mockito nos Use Cases.
-- [ ] Implementação de Service Discovery e API Gateway com Spring Cloud Gateway.
-- [ ] Camada de segurança com autenticação stateless via Spring Security & JWT.
+- [x] Implementação de Service Discovery e API Gateway com Spring Cloud Gateway.
+- [x] Camada de segurança com autenticação stateless via Spring Security & JWT.
 - [ ] Observabilidade distribuída com Prometheus, Grafana e OpenTelemetry (Tracing).
 - [ ] Microsserviço de Faturamento (`billing-service`) e integração com convênios (`medical-integration-service`).
 
