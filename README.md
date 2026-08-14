@@ -8,6 +8,9 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-6.0-green?logo=mongodb&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-F46800?logo=grafana&logoColor=white)
+![Jaeger](https://img.shields.io/badge/Jaeger-60C0A5?logo=jaegertracing&logoColor=white)
 ![OpenAPI 3](https://img.shields.io/badge/OpenAPI-3.0-6BA539?logo=openapiinitiative&logoColor=white)
 ![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
@@ -28,6 +31,7 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 - **Processamento de Pagamento (`payment-service`)**: Máquina de estados financeira (`PENDING`, `PROCESSING`, `APPROVED`, `FAILED`, `REFUNDED`) com disparo assíncrono de liquidações.
 - **Notificações Multicanal (`notification-service`)**: Envio desacoplado de confirmações e recibos via Email (extensível para SMS e Push Notification) utilizando o padrão **Strategy (GoF)** e persistência em NoSQL para auditoria.
 - **Autenticação e Segurança (`auth-service` e `gateway-service`)**: Identity Provider com emissão de tokens JWT e um API Gateway blindado que atua como Resource Server validando rotas na borda.
+- **Observabilidade Distribuída**: Scraping ativo de métricas com Prometheus, dashboards analíticos no Grafana e rastreamento distribuído (Tracing) injetando Correlação OTel ponta a ponta via Jaeger.
 - **Saga Coreografada via Kafka**: Comunicação 100% assíncrona orientada a eventos de domínio (`appointmentCreated`, `paymentProcessed`) sem acoplamento entre os serviços.
 - **Documentação Viva com Swagger / OpenAPI 3**: Interface interativa para explorar e testar os contratos de API diretamente pelo navegador.
 - **Testes Unitários Rápidos e Isolados**: Cobertura de regras de negócio com **JUnit 5 + Mockito** explorando o desacoplamento da Clean Architecture.
@@ -41,6 +45,7 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 | **Linguagem** | Java 21 LTS | Uso de Records para DTOs imutáveis, Pattern Matching e alta performance. |
 | **Frameworks Base** | Spring Boot & Spring Cloud Gateway | Produtividade no ecossistema corporativo e roteamento performático baseado em WebFlux. |
 | **Segurança** | Spring Security & OAuth2 | Implementação de JWT Stateless e proteção de borda atuando como Resource Server. |
+| **Observabilidade** | Micrometer, Prometheus, Grafana & Jaeger | Telemetria completa: métricas exportadas nativamente pela JVM e Rastreamento de Traces injetados via OpenTelemetry. |
 | **Mensageria** | Apache Kafka (KRaft) | Alta vazão, tolerância a falhas e ordenação garantida por partição sem necessidade do ZooKeeper. |
 | **Banco Relacional** | PostgreSQL 16 | Garantia ACID para transações financeiras e registros estruturados de agendamento e usuários. |
 | **Banco NoSQL** | MongoDB 6.0 | Armazenamento semiestruturado flexível de payloads de auditoria e logs de notificação. |
@@ -135,6 +140,9 @@ Serviços iniciados:
 - **MongoDB**: `localhost:27017` (DB: `healthpay_notifications`)
 - **Apache Kafka (KRaft)**: `localhost:9092`
 - **Redis**: `localhost:6379`
+- **Grafana**: `localhost:3000` (user/pass: admin)
+- **Jaeger UI**: `localhost:16686`
+- **Prometheus**: `localhost:9090`
 
 ---
 
@@ -280,7 +288,7 @@ HealthPay/
 - [x] Suíte de testes unitários isolados com JUnit 5 e Mockito nos Use Cases.
 - [x] Implementação de Service Discovery e API Gateway com Spring Cloud Gateway.
 - [x] Camada de segurança com autenticação stateless via Spring Security & JWT.
-- [ ] Observabilidade distribuída com Prometheus, Grafana e OpenTelemetry (Tracing).
+- [x] Observabilidade distribuída com Prometheus, Grafana e OpenTelemetry (Tracing).
 - [ ] Microsserviço de Faturamento (`billing-service`) e integração com convênios (`medical-integration-service`).
 
 ---
