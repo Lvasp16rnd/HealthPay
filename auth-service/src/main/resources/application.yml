@@ -1,0 +1,24 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/healthpay_auth
+    username: admin
+    password: 123456test@jkaH
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+api:
+  security:
+    token:
+      secret: ${JWT_SECRET:minha-chave-super-secreta-do-healthpay-2026}

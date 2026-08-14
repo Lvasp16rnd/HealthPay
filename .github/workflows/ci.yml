@@ -16,6 +16,7 @@ jobs:
         service:
           - appointment-service
           - payment-service
+          - notification-service
 
     steps:
       - name: Checkout repository

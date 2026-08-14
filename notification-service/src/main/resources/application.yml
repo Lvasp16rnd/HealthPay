@@ -1,0 +1,18 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: notification-service
+  mongodb:
+    uri: mongodb://localhost:27017/healthpay_notifications
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: notification-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.type.mapping: appointmentCreated:com.healthpay.notification_service.event.AppointmentCreatedEvent,paymentProcessed:com.healthpay.notification_service.event.PaymentProcessedEvent
