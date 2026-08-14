@@ -30,3 +30,15 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
         spring.json.type.mapping: appointmentCreated:com.healthpay.payment_service.event.AppointmentCreatedEvent
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces
