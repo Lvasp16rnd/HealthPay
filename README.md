@@ -30,11 +30,12 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 - **Agendamento de Consultas (`appointment-service`)**: Registro e ciclo de vida de consultas médicas (`SCHEDULED`, `COMPLETED`, `CANCELLED`) com persistência relacional.
 - **Processamento de Pagamento (`payment-service`)**: Máquina de estados financeira (`PENDING`, `PROCESSING`, `APPROVED`, `FAILED`, `REFUNDED`) com disparo assíncrono de liquidações.
 - **Notificações Multicanal (`notification-service`)**: Envio desacoplado de confirmações e recibos via Email (extensível para SMS e Push Notification) utilizando o padrão **Strategy (GoF)** e persistência em NoSQL para auditoria.
+- **Faturamento e Integração Externa (`billing-service`)**: Geração de faturas e integração via **OpenFeign** com APIs de convênios médicos, com mecanismo de fallback e resiliência a falhas de rede.
 - **Autenticação e Segurança (`auth-service` e `gateway-service`)**: Identity Provider com emissão de tokens JWT e um API Gateway blindado que atua como Resource Server validando rotas na borda.
 - **Observabilidade Distribuída**: Scraping ativo de métricas com Prometheus, dashboards analíticos no Grafana e rastreamento distribuído (Tracing) injetando Correlação OTel ponta a ponta via Jaeger.
-- **Saga Coreografada via Kafka**: Comunicação 100% assíncrona orientada a eventos de domínio (`appointmentCreated`, `paymentProcessed`) sem acoplamento entre os serviços.
+- **Saga Coreografada via Kafka**: Comunicação 100% assíncrona orientada a eventos de domínio (`appointmentCreated`, `paymentProcessed`, `appointmentCompleted`) sem acoplamento entre os serviços.
 - **Documentação Viva com Swagger / OpenAPI 3**: Interface interativa para explorar e testar os contratos de API diretamente pelo navegador.
-- **Testes Unitários Rápidos e Isolados**: Cobertura de regras de negócio com **JUnit 5 + Mockito** explorando o desacoplamento da Clean Architecture.
+- **Testes Unitários e de Integração**: Cobertura de regras de negócio com **JUnit 5 + Mockito** explorando o desacoplamento da Clean Architecture e testes de integração de API Externa com **WireMock**.
 
 ---
 
@@ -64,11 +65,12 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 sequenceDiagram
     autonumber
     actor Cliente as Paciente / Clínica
-    participant AppSvc as Appointment Service (Port 8080)
+    participant AppSvc as Appointment Service (8080)
     participant Kafka as Apache Kafka Broker
-    participant PaySvc as Payment Service (Port 8081)
-    participant NotifSvc as Notification Service (Port 8082)
-    participant Mongo as MongoDB
+    participant PaySvc as Payment Service (8081)
+    participant BillingSvc as Billing Service (8084)
+    participant Convenio as Convênio (API Externa)
+    participant NotifSvc as Notification Service (8082)
     participant Postgres as PostgreSQL
 
     Cliente->>AppSvc: POST /api/appointments (Status: SCHEDULED)
@@ -77,21 +79,25 @@ sequenceDiagram
     
     par Consumo Concorrente
         Kafka-->>NotifSvc: Consome AppointmentCreatedEvent
-        NotifSvc->>NotifSvc: Strategy: EmailNotificationStrategy
-        NotifSvc->>Mongo: Registra histórico de notificação de agendamento
     and
         Kafka-->>PaySvc: Consome AppointmentCreatedEvent
-        PaySvc->>Postgres: Cria e processa registro de pagamento (Status: APPROVED)
+        PaySvc->>Postgres: Processa pagamento (Status: APPROVED)
         PaySvc->>Kafka: Publica PaymentProcessedEvent (Tópico: payment.processed)
     end
 
-    par Consumo do Pagamento
-        Kafka-->>AppSvc: Consome PaymentProcessedEvent
-        AppSvc->>Postgres: Atualiza consulta para COMPLETED
-    and
-        Kafka-->>NotifSvc: Consome PaymentProcessedEvent
-        NotifSvc->>NotifSvc: Strategy: EmailNotificationStrategy
-        NotifSvc->>Mongo: Registra comprovante de pagamento enviado
+    Kafka-->>AppSvc: Consome PaymentProcessedEvent
+    AppSvc->>Postgres: Atualiza consulta para COMPLETED
+    AppSvc->>Kafka: Publica AppointmentCompletedEvent (Tópico: appointment.completed)
+
+    Kafka-->>BillingSvc: Consome AppointmentCompletedEvent
+    BillingSvc->>Postgres: Gera Fatura (Status: PENDING)
+    BillingSvc->>Convenio: Envia Fatura (HTTP POST via OpenFeign)
+    alt Convênio Responde OK
+        Convenio-->>BillingSvc: HTTP 200 / ACCEPTED
+        BillingSvc->>Postgres: Atualiza Fatura para SENT_TO_INSURANCE
+    else Convênio Offline (Fallback)
+        Convenio-->>BillingSvc: HTTP 500 / Connection Refused
+        BillingSvc->>Postgres: Atualiza Fatura para FAILED (Resiliência)
     end
 ```
 
@@ -162,6 +168,10 @@ mvn spring-boot:run
 # Terminal 3: Notification Service (Porta 8082)
 cd notification-service
 mvn spring-boot:run
+
+# Terminal 4: Billing Service (Porta 8084)
+cd billing-service
+mvn spring-boot:run
 ```
 
 ---
@@ -228,6 +238,10 @@ mvn test
 # Testes do Notification Service
 cd notification-service
 mvn test
+
+# Testes do Billing Service
+cd billing-service
+mvn test
 ```
 
 ### Cobertura dos Testes Unitários:
@@ -272,6 +286,7 @@ HealthPay/
 ├── appointment-service/           # Microsserviço de Agendamento (Port 8080)
 ├── payment-service/               # Microsserviço de Pagamento (Port 8081)
 ├── notification-service/          # Microsserviço de Notificações (Port 8082)
+├── billing-service/               # Microsserviço de Faturamento e Convênios (Port 8084)
 ├── .github/workflows/ci.yml       # Pipeline CI/CD com GitHub Actions
 └── markdowns/                     # Especificações e planejamento técnico
 ```
@@ -289,7 +304,7 @@ HealthPay/
 - [x] Implementação de Service Discovery e API Gateway com Spring Cloud Gateway.
 - [x] Camada de segurança com autenticação stateless via Spring Security & JWT.
 - [x] Observabilidade distribuída com Prometheus, Grafana e OpenTelemetry (Tracing).
-- [ ] Microsserviço de Faturamento (`billing-service`) e integração com convênios (`medical-integration-service`).
+- [x] Microsserviço de Faturamento (`billing-service`) e integração com convênios (`medical-integration-service`) usando OpenFeign e tolerância a falhas.
 
 ---
 
