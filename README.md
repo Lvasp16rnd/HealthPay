@@ -8,6 +8,9 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-6.0-green?logo=mongodb&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-F46800?logo=grafana&logoColor=white)
+![Jaeger](https://img.shields.io/badge/Jaeger-60C0A5?logo=jaegertracing&logoColor=white)
 ![OpenAPI 3](https://img.shields.io/badge/OpenAPI-3.0-6BA539?logo=openapiinitiative&logoColor=white)
 ![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
@@ -27,10 +30,12 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 - **Agendamento de Consultas (`appointment-service`)**: Registro e ciclo de vida de consultas médicas (`SCHEDULED`, `COMPLETED`, `CANCELLED`) com persistência relacional.
 - **Processamento de Pagamento (`payment-service`)**: Máquina de estados financeira (`PENDING`, `PROCESSING`, `APPROVED`, `FAILED`, `REFUNDED`) com disparo assíncrono de liquidações.
 - **Notificações Multicanal (`notification-service`)**: Envio desacoplado de confirmações e recibos via Email (extensível para SMS e Push Notification) utilizando o padrão **Strategy (GoF)** e persistência em NoSQL para auditoria.
+- **Faturamento e Integração Externa (`billing-service`)**: Geração de faturas e integração via **OpenFeign** com APIs de convênios médicos, com mecanismo de fallback e resiliência a falhas de rede.
 - **Autenticação e Segurança (`auth-service` e `gateway-service`)**: Identity Provider com emissão de tokens JWT e um API Gateway blindado que atua como Resource Server validando rotas na borda.
-- **Saga Coreografada via Kafka**: Comunicação 100% assíncrona orientada a eventos de domínio (`appointmentCreated`, `paymentProcessed`) sem acoplamento entre os serviços.
+- **Observabilidade Distribuída**: Scraping ativo de métricas com Prometheus, dashboards analíticos no Grafana e rastreamento distribuído (Tracing) injetando Correlação OTel ponta a ponta via Jaeger.
+- **Saga Coreografada via Kafka**: Comunicação 100% assíncrona orientada a eventos de domínio (`appointmentCreated`, `paymentProcessed`, `appointmentCompleted`) sem acoplamento entre os serviços.
 - **Documentação Viva com Swagger / OpenAPI 3**: Interface interativa para explorar e testar os contratos de API diretamente pelo navegador.
-- **Testes Unitários Rápidos e Isolados**: Cobertura de regras de negócio com **JUnit 5 + Mockito** explorando o desacoplamento da Clean Architecture.
+- **Testes Unitários e de Integração**: Cobertura de regras de negócio com **JUnit 5 + Mockito** explorando o desacoplamento da Clean Architecture e testes de integração de API Externa com **WireMock**.
 
 ---
 
@@ -41,6 +46,7 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 | **Linguagem** | Java 21 LTS | Uso de Records para DTOs imutáveis, Pattern Matching e alta performance. |
 | **Frameworks Base** | Spring Boot & Spring Cloud Gateway | Produtividade no ecossistema corporativo e roteamento performático baseado em WebFlux. |
 | **Segurança** | Spring Security & OAuth2 | Implementação de JWT Stateless e proteção de borda atuando como Resource Server. |
+| **Observabilidade** | Micrometer, Prometheus, Grafana & Jaeger | Telemetria completa: métricas exportadas nativamente pela JVM e Rastreamento de Traces injetados via OpenTelemetry. |
 | **Mensageria** | Apache Kafka (KRaft) | Alta vazão, tolerância a falhas e ordenação garantida por partição sem necessidade do ZooKeeper. |
 | **Banco Relacional** | PostgreSQL 16 | Garantia ACID para transações financeiras e registros estruturados de agendamento e usuários. |
 | **Banco NoSQL** | MongoDB 6.0 | Armazenamento semiestruturado flexível de payloads de auditoria e logs de notificação. |
@@ -59,11 +65,12 @@ O **HealthPay** resolve esse desafio através de uma arquitetura de **microsserv
 sequenceDiagram
     autonumber
     actor Cliente as Paciente / Clínica
-    participant AppSvc as Appointment Service (Port 8080)
+    participant AppSvc as Appointment Service (8080)
     participant Kafka as Apache Kafka Broker
-    participant PaySvc as Payment Service (Port 8081)
-    participant NotifSvc as Notification Service (Port 8082)
-    participant Mongo as MongoDB
+    participant PaySvc as Payment Service (8081)
+    participant BillingSvc as Billing Service (8084)
+    participant Convenio as Convênio (API Externa)
+    participant NotifSvc as Notification Service (8082)
     participant Postgres as PostgreSQL
 
     Cliente->>AppSvc: POST /api/appointments (Status: SCHEDULED)
@@ -72,21 +79,25 @@ sequenceDiagram
     
     par Consumo Concorrente
         Kafka-->>NotifSvc: Consome AppointmentCreatedEvent
-        NotifSvc->>NotifSvc: Strategy: EmailNotificationStrategy
-        NotifSvc->>Mongo: Registra histórico de notificação de agendamento
     and
         Kafka-->>PaySvc: Consome AppointmentCreatedEvent
-        PaySvc->>Postgres: Cria e processa registro de pagamento (Status: APPROVED)
+        PaySvc->>Postgres: Processa pagamento (Status: APPROVED)
         PaySvc->>Kafka: Publica PaymentProcessedEvent (Tópico: payment.processed)
     end
 
-    par Consumo do Pagamento
-        Kafka-->>AppSvc: Consome PaymentProcessedEvent
-        AppSvc->>Postgres: Atualiza consulta para COMPLETED
-    and
-        Kafka-->>NotifSvc: Consome PaymentProcessedEvent
-        NotifSvc->>NotifSvc: Strategy: EmailNotificationStrategy
-        NotifSvc->>Mongo: Registra comprovante de pagamento enviado
+    Kafka-->>AppSvc: Consome PaymentProcessedEvent
+    AppSvc->>Postgres: Atualiza consulta para COMPLETED
+    AppSvc->>Kafka: Publica AppointmentCompletedEvent (Tópico: appointment.completed)
+
+    Kafka-->>BillingSvc: Consome AppointmentCompletedEvent
+    BillingSvc->>Postgres: Gera Fatura (Status: PENDING)
+    BillingSvc->>Convenio: Envia Fatura (HTTP POST via OpenFeign)
+    alt Convênio Responde OK
+        Convenio-->>BillingSvc: HTTP 200 / ACCEPTED
+        BillingSvc->>Postgres: Atualiza Fatura para SENT_TO_INSURANCE
+    else Convênio Offline (Fallback)
+        Convenio-->>BillingSvc: HTTP 500 / Connection Refused
+        BillingSvc->>Postgres: Atualiza Fatura para FAILED (Resiliência)
     end
 ```
 
@@ -135,6 +146,9 @@ Serviços iniciados:
 - **MongoDB**: `localhost:27017` (DB: `healthpay_notifications`)
 - **Apache Kafka (KRaft)**: `localhost:9092`
 - **Redis**: `localhost:6379`
+- **Grafana**: `localhost:3000` (user/pass: admin)
+- **Jaeger UI**: `localhost:16686`
+- **Prometheus**: `localhost:9090`
 
 ---
 
@@ -153,6 +167,10 @@ mvn spring-boot:run
 
 # Terminal 3: Notification Service (Porta 8082)
 cd notification-service
+mvn spring-boot:run
+
+# Terminal 4: Billing Service (Porta 8084)
+cd billing-service
 mvn spring-boot:run
 ```
 
@@ -220,6 +238,10 @@ mvn test
 # Testes do Notification Service
 cd notification-service
 mvn test
+
+# Testes do Billing Service
+cd billing-service
+mvn test
 ```
 
 ### Cobertura dos Testes Unitários:
@@ -264,6 +286,7 @@ HealthPay/
 ├── appointment-service/           # Microsserviço de Agendamento (Port 8080)
 ├── payment-service/               # Microsserviço de Pagamento (Port 8081)
 ├── notification-service/          # Microsserviço de Notificações (Port 8082)
+├── billing-service/               # Microsserviço de Faturamento e Convênios (Port 8084)
 ├── .github/workflows/ci.yml       # Pipeline CI/CD com GitHub Actions
 └── markdowns/                     # Especificações e planejamento técnico
 ```
@@ -280,8 +303,8 @@ HealthPay/
 - [x] Suíte de testes unitários isolados com JUnit 5 e Mockito nos Use Cases.
 - [x] Implementação de Service Discovery e API Gateway com Spring Cloud Gateway.
 - [x] Camada de segurança com autenticação stateless via Spring Security & JWT.
-- [ ] Observabilidade distribuída com Prometheus, Grafana e OpenTelemetry (Tracing).
-- [ ] Microsserviço de Faturamento (`billing-service`) e integração com convênios (`medical-integration-service`).
+- [x] Observabilidade distribuída com Prometheus, Grafana e OpenTelemetry (Tracing).
+- [x] Microsserviço de Faturamento (`billing-service`) e integração com convênios (`medical-integration-service`) usando OpenFeign e tolerância a falhas.
 
 ---
 

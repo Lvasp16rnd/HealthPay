@@ -3,6 +3,8 @@ package com.healthpay.appointment_service.application;
 import com.healthpay.appointment_service.domain.Appointment;
 import com.healthpay.appointment_service.domain.AppointmentRepository;
 import com.healthpay.appointment_service.domain.AppointmentStatus;
+import com.healthpay.appointment_service.event.AppointmentCompletedEvent;
+import com.healthpay.appointment_service.event.AppointmentProducer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,9 @@ public class UpdateAppointmentUseCaseTest {
 
     @Mock
     private AppointmentRepository appointmentRepository;
+
+    @Mock
+    private AppointmentProducer appointmentProducer;
 
     @InjectMocks
     private UpdateAppointmentStatusUseCase updateAppointmentStatusUseCase;
@@ -55,6 +60,7 @@ public class UpdateAppointmentUseCaseTest {
         assertEquals(AppointmentStatus.COMPLETED, updated.getStatus());
         verify(appointmentRepository, times(1)).findById(appointmentId);
         verify(appointmentRepository, times(1)).save(existingAppointment);
+        verify(appointmentProducer, times(1)).sendAppointmentCompleted(any(AppointmentCompletedEvent.class));
     }
 
     @Test

@@ -1,6 +1,9 @@
+server:
+  port: 8084
+
 spring:
   application:
-    name: appointment-service
+    name: billing-service
   datasource:
     url: jdbc:postgresql://localhost:5433/healthpay
     username: admin
@@ -15,19 +18,15 @@ spring:
         format_sql: true
   kafka:
     bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.type.mapping: appointmentCreated:com.healthpay.appointment_service.event.AppointmentCreatedEvent
     consumer:
-      group-id: appointment-group
+      group-id: billing-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-        spring.json.type.mapping: paymentProcessed:com.healthpay.appointment_service.event.PaymentProcessedEvent
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.healthpay.billing_service.event.AppointmentCompletedEvent
 
 management:
   endpoints:
@@ -40,3 +39,8 @@ management:
   otlp:
     tracing:
       endpoint: http://localhost:4318/v1/traces
+
+# Configuracao da API externa (Health Insurance) que sera mockada
+health-insurance:
+  client:
+    url: http://localhost:8089 # URL do nosso Mock/WireMock
